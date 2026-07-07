@@ -2,32 +2,34 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>게임 팀 매치 계산기</title>
+    <title>🎮 게임 팀 매치 계산기</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; color: #333; }
         h1 { text-align: center; }
         
-        /* 등록 폼 스타일 */
-        .manager-box { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e9ecef; text-align: center; }
-        input { padding: 10px; font-size: 14px; margin-right: 5px; width: 150px; border: 1px solid #ccc; border-radius: 4px; }
+        /* 폼 스타일 */
+        .manager-box { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e9ecef; }
+        .input-group { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        input[type="text"], input[type="number"] { padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; width: 150px; }
+        textarea { width: 100%; height: 80px; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px; }
         
         /* 버튼 스타일 */
         button { padding: 8px 12px; font-size: 14px; cursor: pointer; border: none; border-radius: 4px; color: white; font-weight: bold; transition: 0.2s; }
-        .btn-add { background: #0070f3; } .btn-add:hover { background: #005bb5; }
+        .btn-add { background: #0070f3; padding: 10px 20px; } .btn-add:hover { background: #005bb5; }
+        .btn-bulk { background: #8b5cf6; padding: 10px 20px; width: 100%; } .btn-bulk:hover { background: #7c3aed; }
         .btn-move { background: #10b981; font-size: 12px; margin-left: 10px; } .btn-move:hover { background: #059669; }
         .btn-remove { background: #6b7280; font-size: 12px; margin-left: 10px; } .btn-remove:hover { background: #4b5563; }
         .btn-delete { background: #ef4444; font-size: 12px; margin-left: 5px; } .btn-delete:hover { background: #dc2626; }
         .btn-match { width: 100%; padding: 15px; font-size: 18px; background: #3b82f6; margin-top: 20px; border-radius: 8px; } .btn-match:hover { background: #2563eb; }
 
-        /* 좌우 레이아웃 (참가자 vs 전체) */
+        /* 좌우 레이아웃 */
         .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-        .list-box { border: 1px solid #ddd; padding: 15px; border-radius: 8px; background: #fff; min-height: 200px; }
-        .list-box h3 { margin-top: 0; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .list-box { border: 1px solid #ddd; padding: 15px; border-radius: 8px; background: #fff; min-height: 200px; max-height: 400px; overflow-y: auto; }
+        .list-box h3 { margin-top: 0; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; position: sticky; top: 0; background: #fff; }
         
         /* 리스트 스타일 */
         ul { list-style: none; padding: 0; margin: 0; }
         li { padding: 10px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; }
-        li:last-child { border-bottom: none; }
         .player-info { flex-grow: 1; }
         
         /* 결과 팀 박스 */
@@ -40,9 +42,18 @@
     <h1>🎮 롤 내전 팀 짜기 프로그램</h1>
 
     <div class="manager-box">
-        <input type="text" id="playerName" placeholder="선수 이름 입력">
-        <input type="number" id="playerMmr" placeholder="점수 (예: 1000)">
-        <button class="btn-add" onclick="addPlayer()">새 선수 등록</button>
+        <h3 style="text-align: center; margin-top: 0;">👤 선수 등록</h3>
+        
+        <div class="input-group">
+            <input type="text" id="playerName" placeholder="선수 이름">
+            <input type="number" id="playerMmr" placeholder="점수 (예: 10)">
+            <button class="btn-add" onclick="addPlayer()">1명씩 추가</button>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
+
+        <textarea id="bulkData" placeholder="여러 명 한 번에 등록하려면 여기에 복사+붙여넣기 하세요.&#13;&#10;예시:&#13;&#10;인목 10&#13;&#10;승우 10"></textarea>
+        <button class="btn-bulk" onclick="bulkAddPlayers()">전체 명단 일괄 등록하기</button>
     </div>
 
     <div class="grid-container">
@@ -77,19 +88,17 @@
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmeHN1YmdscWJ3cXZjaHBqa3NjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzg4NTYsImV4cCI6MjA5ODkxNDg1Nn0.CTxppetZcwGWqLpUtPjnyreIY6zVgIjrvj4DP6w4maw';
         const supabase = createClient(supabaseUrl, supabaseKey);
 
-        let allPlayers = []; // DB에 있는 모든 선수
-        let participatingPlayers = []; // 왼쪽에 추가된(참가할) 선수
+        let allPlayers = []; 
+        let participatingPlayers = []; 
 
-        // [기능 1] DB에서 선수 목록 불러오기
         async function loadPlayers() {
-            const { data, error } = await supabase.from('players').select('*').order('name');
+            const { data, error } = await supabase.from('players').select('*').order('mmr', { ascending: false });
             if (!error && data) {
                 allPlayers = data;
                 renderLists();
             }
         }
 
-        // [기능 2] 화면에 왼쪽/오른쪽 리스트 그리기
         function renderLists() {
             const dbListElement = document.getElementById('dbList');
             const partListElement = document.getElementById('participatingList');
@@ -99,7 +108,6 @@
             
             document.getElementById('partCount').innerText = participatingPlayers.length;
 
-            // 참가자 명단(왼쪽) 그리기
             participatingPlayers.forEach(p => {
                 partListElement.innerHTML += `
                     <li>
@@ -109,7 +117,6 @@
                 `;
             });
 
-            // 전체 명단(오른쪽) 그리기 - 참가 중인 선수는 빼고 보여줌
             const participatingIds = participatingPlayers.map(p => p.id);
             const availablePlayers = allPlayers.filter(p => !participatingIds.includes(p.id));
 
@@ -119,14 +126,13 @@
                         <span class="player-info"><strong>${p.name}</strong> (${p.mmr}점)</span>
                         <div>
                             <button class="btn-move" onclick="addToMatch(${p.id})">⬅️ 참가</button>
-                            <button class="btn-delete" onclick="deletePlayer(${p.id})">DB 삭제</button>
+                            <button class="btn-delete" onclick="deletePlayer(${p.id})">삭제</button>
                         </div>
                     </li>
                 `;
             });
         }
 
-        // [기능 3] 오른쪽 -> 왼쪽으로 넘기기 (참가)
         window.addToMatch = function(id) {
             const player = allPlayers.find(p => p.id === id);
             if (player && !participatingPlayers.some(p => p.id === id)) {
@@ -135,17 +141,14 @@
             }
         }
 
-        // [기능 4] 왼쪽 -> 오른쪽으로 빼기 (참가 취소)
         window.removeFromMatch = function(id) {
             participatingPlayers = participatingPlayers.filter(p => p.id !== id);
             renderLists();
         }
 
-        // [기능 5] 새 선수 DB에 등록하기
         window.addPlayer = async function() {
             const name = document.getElementById('playerName').value.trim();
             const mmr = parseInt(document.getElementById('playerMmr').value);
-
             if (!name || isNaN(mmr)) return alert("이름과 점수를 확인해주세요.");
 
             const { error } = await supabase.from('players').insert([{ name, mmr }]);
@@ -156,27 +159,56 @@
             }
         }
 
-        // [기능 6] 선수를 DB에서 아예 삭제하기
+        // 🌟 새롭게 추가된 [일괄 등록 기능]
+        window.bulkAddPlayers = async function() {
+            const text = document.getElementById('bulkData').value.trim();
+            if (!text) return alert("데이터를 입력해 주세요.");
+
+            const lines = text.split('\n');
+            const insertData = [];
+
+            for (let line of lines) {
+                // 띄어쓰기나 탭을 기준으로 이름과 점수 분리
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 2) {
+                    const name = parts[0];
+                    const mmr = parseInt(parts[1]);
+                    if (!isNaN(mmr)) {
+                        insertData.push({ name, mmr });
+                    }
+                }
+            }
+
+            if (insertData.length > 0) {
+                document.getElementById('bulkData').value = '등록 중... 잠시만 기다려주세요!';
+                const { error } = await supabase.from('players').insert(insertData);
+                if (!error) {
+                    alert(`${insertData.length}명 일괄 등록 완료!`);
+                    document.getElementById('bulkData').value = '';
+                    loadPlayers();
+                } else {
+                    alert("오류 발생: " + error.message);
+                    document.getElementById('bulkData').value = text; // 에러나면 복구
+                }
+            } else {
+                alert("양식에 맞게 입력되지 않았습니다. (예: 인목 10)");
+            }
+        }
+
         window.deletePlayer = async function(id) {
-            if (!confirm("이 선수를 전체 명단에서 영구 삭제할까요?")) return;
-            
+            if (!confirm("삭제하시겠습니까?")) return;
             const { error } = await supabase.from('players').delete().eq('id', id);
             if (!error) {
-                // 혹시 참가 명단에 올려뒀다면 거기서도 뺌
                 participatingPlayers = participatingPlayers.filter(p => p.id !== id);
                 loadPlayers();
             }
         }
 
-        // [기능 7] 참가자들로 팀 매칭하기 (이제 DB 전체가 아니라 참가자만으로 계산)
         window.makeTeams = function() {
             if (participatingPlayers.length === 0) {
-                return alert("왼쪽 참가 명단에 선수를 먼저 추가해 주세요!");
+                return alert("왼쪽 참가 명단에 선수를 추가해 주세요!");
             }
-
-            // 실력(MMR) 기준 내림차순 정렬
             let sortedPlayers = [...participatingPlayers].sort((a, b) => b.mmr - a.mmr);
-
             let teamA = [], teamB = [];
             let sumA = 0, sumB = 0;
 
@@ -192,12 +224,10 @@
 
             document.getElementById('listA').innerHTML = teamA.map(p => `<li>${p.name} (${p.mmr}점)</li>`).join('');
             document.getElementById('scoreA').innerText = sumA;
-            
             document.getElementById('listB').innerHTML = teamB.map(p => `<li>${p.name} (${p.mmr}점)</li>`).join('');
             document.getElementById('scoreB').innerText = sumB;
         }
 
-        // 처음에 데이터 불러오기
         loadPlayers();
     </script>
 </body>
