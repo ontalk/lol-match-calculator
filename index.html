@@ -7,13 +7,11 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; color: #333; }
         h1 { text-align: center; }
         
-        /* 폼 스타일 */
         .manager-box { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e9ecef; }
         .input-group { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
         input[type="text"], input[type="number"] { padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; width: 150px; }
         textarea { width: 100%; height: 80px; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px; }
         
-        /* 버튼 스타일 */
         button { padding: 8px 12px; font-size: 14px; cursor: pointer; border: none; border-radius: 4px; color: white; font-weight: bold; transition: 0.2s; }
         .btn-add { background: #0070f3; padding: 10px 20px; } .btn-add:hover { background: #005bb5; }
         .btn-bulk { background: #8b5cf6; padding: 10px 20px; width: 100%; } .btn-bulk:hover { background: #7c3aed; }
@@ -21,25 +19,25 @@
         .btn-edit { background: #eab308; font-size: 12px; } .btn-edit:hover { background: #ca8a04; }
         .btn-remove { background: #6b7280; font-size: 12px; } .btn-remove:hover { background: #4b5563; }
         .btn-delete { background: #ef4444; font-size: 12px; } .btn-delete:hover { background: #dc2626; }
-        .btn-match { width: 100%; padding: 15px; font-size: 18px; background: #3b82f6; margin-top: 20px; border-radius: 8px; } .btn-match:hover { background: #2563eb; }
+        .btn-match { width: 100%; padding: 15px; font-size: 18px; background: #3b82f6; margin-top: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); } .btn-match:hover { background: #2563eb; }
 
-        /* 좌우 레이아웃 */
         .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
         .list-box { border: 1px solid #ddd; padding: 0 15px 15px 15px; border-radius: 8px; background: #fff; min-height: 200px; max-height: 400px; overflow-y: auto; }
         
-        /* 🌟 제목(h3) 부분 좌우 정렬되도록 CSS 수정 */
         .list-box h3 { margin: 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding: 15px 0 10px 0; position: sticky; top: 0; background: #fff; z-index: 10; font-size: 16px; }
         .list-box h3 span.title-center { flex-grow: 1; text-align: center; } 
 
-        /* 리스트 스타일 */
         ul { list-style: none; padding: 0; margin: 0; }
         li { padding: 10px 0; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; }
         .player-info { flex-grow: 1; }
         .btn-group { display: flex; gap: 5px; align-items: center; } 
         
-        /* 결과 팀 박스 */
         .team-container { display: flex; justify-content: space-between; margin-top: 20px; gap: 20px; }
-        .team-box { border: 1px solid #ccc; padding: 15px; width: 50%; border-radius: 8px; box-sizing: border-box; background: #fdfdfd; }
+        .team-box { border: 1px solid #ccc; padding: 15px; width: 50%; border-radius: 8px; box-sizing: border-box; background: #fdfdfd; min-height: 200px; }
+        .empty-team { text-align: center; color: #9ca3af; margin-top: 30px; font-style: italic; }
+        .loading-text { text-align: center; color: #3b82f6; font-weight: bold; margin-top: 30px; animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -66,23 +64,24 @@
             </h3>
             <ul id="participatingList"></ul>
         </div>
-        
         <div class="list-box" style="border-top: 4px solid #6b7280;">
             <h3><span class="title-center">👉 전체 등록 선수</span></h3>
             <ul id="dbList"></ul>
         </div>
     </div>
 
-    <button class="btn-match" onclick="makeTeams()">공평하게 5:5 팀 나누기</button>
+    <!-- 팀 매칭 버튼 -->
+    <button class="btn-match" onclick="makeTeams()">🎲 공평하게 5:5 팀 나누기 (모두에게 동기화)</button>
 
+    <!-- 결과 화면 -->
     <div class="team-container">
-        <div id="teamA" class="team-box" style="border-top: 4px solid #ef4444;">
+        <div id="teamA_box" class="team-box" style="border-top: 4px solid #ef4444;">
             <h3>🔴 A팀 (총점: <span id="scoreA">0</span>)</h3>
-            <ul id="listA"></ul>
+            <ul id="listA"><li class="empty-team">팀을 나누면 여기에 결과가 표시됩니다.</li></ul>
         </div>
-        <div id="teamB" class="team-box" style="border-top: 4px solid #3b82f6;">
+        <div id="teamB_box" class="team-box" style="border-top: 4px solid #3b82f6;">
             <h3>🔵 B팀 (총점: <span id="scoreB">0</span>)</h3>
-            <ul id="listB"></ul>
+            <ul id="listB"><li class="empty-team">팀을 나누면 여기에 결과가 표시됩니다.</li></ul>
         </div>
     </div>
 
@@ -107,6 +106,30 @@
             const { data, error } = await supabase.from('players').select('*').order('mmr', { ascending: false });
             if (!error && data) {
                 renderLists(data);
+                renderTeams(data); // 🌟 팀 매칭 결과도 DB에서 읽어와서 그립니다!
+            }
+        }
+
+        // 🌟 DB의 assigned_team 값을 읽어와서 아래쪽 A팀/B팀 화면을 채우는 함수
+        function renderTeams(allPlayers) {
+            const teamA = allPlayers.filter(p => p.assigned_team === 'A');
+            const teamB = allPlayers.filter(p => p.assigned_team === 'B');
+
+            teamA.sort((a, b) => b.mmr - a.mmr);
+            teamB.sort((a, b) => b.mmr - a.mmr);
+
+            const sumA = teamA.reduce((sum, p) => sum + p.mmr, 0);
+            const sumB = teamB.reduce((sum, p) => sum + p.mmr, 0);
+
+            document.getElementById('scoreA').innerText = sumA;
+            document.getElementById('scoreB').innerText = sumB;
+
+            if (teamA.length > 0) {
+                document.getElementById('listA').innerHTML = teamA.map(p => `<li>${p.name} (${p.mmr}점)</li>`).join('');
+                document.getElementById('listB').innerHTML = teamB.map(p => `<li>${p.name} (${p.mmr}점)</li>`).join('');
+            } else {
+                document.getElementById('listA').innerHTML = '<li class="empty-team">팀을 나누면 여기에 결과가 표시됩니다.</li>';
+                document.getElementById('listB').innerHTML = '<li class="empty-team">팀을 나누면 여기에 결과가 표시됩니다.</li>';
             }
         }
 
@@ -153,32 +176,24 @@
         }
 
         window.addToMatch = async function(id) {
-            // 🌟 10명 초과 방지 로직
-            if (participatingPlayers.length >= 10) {
-                return alert("이번 게임 정원(10명)이 이미 꽉 찼습니다! 누군가 빼야 추가할 수 있습니다.");
-            }
-            await supabase.from('players').update({ is_participating: true, lock_team: 'none' }).eq('id', id);
-            loadPlayers();
+            if (participatingPlayers.length >= 10) return alert("이번 게임 정원(10명)이 이미 꽉 찼습니다!");
+            // 누군가 새로 참가하면 기존에 짜둔 팀이 무의미해지므로 팀 결과를 초기화(null) 합니다.
+            await supabase.from('players').update({ is_participating: true, lock_team: 'none', assigned_team: null }).eq('id', id);
         }
 
         window.removeFromMatch = async function(id) {
-            await supabase.from('players').update({ is_participating: false, lock_team: 'none' }).eq('id', id);
-            loadPlayers();
+            await supabase.from('players').update({ is_participating: false, lock_team: 'none', assigned_team: null }).eq('id', id);
         }
 
-        // 🌟 '모두 취소(초기화)' 로직
         window.removeAllFromMatch = async function() {
             if (participatingPlayers.length === 0) return alert("현재 참가자가 없습니다.");
             if (!confirm("참가자 10명을 전부 대기실로 돌려보내고 방을 초기화하시겠습니까?")) return;
-            
-            // 모든 참가자의 상태와 팀 고정을 한 번에 초기화
-            await supabase.from('players').update({ is_participating: false, lock_team: 'none' }).eq('is_participating', true);
-            loadPlayers();
+            // 🌟 모두 취소할 때 배정된 팀(assigned_team) 기록도 싹 다 지워서 방을 리셋합니다.
+            await supabase.from('players').update({ is_participating: false, lock_team: 'none', assigned_team: null }).eq('is_participating', true);
         }
 
         window.changeLock = async function(id, value) {
             await supabase.from('players').update({ lock_team: value }).eq('id', id);
-            loadPlayers();
         }
 
         window.editPlayer = async function(id, name, currentMmr) {
@@ -186,55 +201,46 @@
             if (newMmrText === null) return; 
             const newMmr = parseInt(newMmrText);
             if (isNaN(newMmr)) return alert("정확한 숫자 점수를 입력해 주세요.");
-
             await supabase.from('players').update({ mmr: newMmr }).eq('id', id);
-            loadPlayers();
         }
 
         window.addPlayer = async function() {
             const name = document.getElementById('playerName').value.trim();
             const mmr = parseInt(document.getElementById('playerMmr').value);
             if (!name || isNaN(mmr)) return alert("이름과 점수를 확인해주세요.");
-
-            await supabase.from('players').insert([{ name, mmr, is_participating: false, lock_team: 'none' }]);
+            await supabase.from('players').insert([{ name, mmr, is_participating: false, lock_team: 'none', assigned_team: null }]);
             document.getElementById('playerName').value = '';
             document.getElementById('playerMmr').value = '';
-            loadPlayers();
         }
 
         window.bulkAddPlayers = async function() {
             const text = document.getElementById('bulkData').value.trim();
             if (!text) return alert("데이터를 입력해 주세요.");
-
             const lines = text.split('\n');
             const insertData = [];
-
             for (let line of lines) {
                 const parts = line.trim().split(/\s+/);
                 if (parts.length >= 2) {
                     const name = parts[0];
                     const mmr = parseInt(parts[1]);
-                    if (!isNaN(mmr)) insertData.push({ name, mmr, is_participating: false, lock_team: 'none' });
+                    if (!isNaN(mmr)) insertData.push({ name, mmr, is_participating: false, lock_team: 'none', assigned_team: null });
                 }
             }
-
             if (insertData.length > 0) {
                 document.getElementById('bulkData').value = '등록 중...';
                 await supabase.from('players').insert(insertData);
                 alert(`${insertData.length}명 등록 완료!`);
                 document.getElementById('bulkData').value = '';
-                loadPlayers();
             }
         }
 
         window.deletePlayer = async function(id) {
             if (!confirm("삭제하시겠습니까?")) return;
             await supabase.from('players').delete().eq('id', id);
-            loadPlayers();
         }
 
-        window.makeTeams = function() {
-            // 🌟 10명이 아니면 팀을 못 짜게 막는 로직
+        // 🌟 팀을 나누고 DB에 결과를 쏘아 올리는 로직
+        window.makeTeams = async function() {
             if (participatingPlayers.length !== 10) {
                 return alert(`현재 참가자가 ${participatingPlayers.length}명입니다. 정확히 10명이 모여야 팀을 나눌 수 있습니다!`);
             }
@@ -263,12 +269,10 @@
             function dfs(index, chosenFlexible, currentFlexibleSum) {
                 if (chosenFlexible.length === needA) {
                     const finalTeamA = [...forcedA, ...chosenFlexible];
-                    
                     if (totalTens >= 2) {
                         const tensInA = finalTeamA.filter(p => p.mmr === 10).length;
                         if (tensInA < minTensInA || tensInA > maxTensInA) return; 
                     }
-
                     const sumA = forcedASum + currentFlexibleSum;
                     const sumB = totalScore - sumA;
                     const diff = Math.abs(sumA - sumB);
@@ -281,7 +285,6 @@
                     }
                     return;
                 }
-                
                 if (index >= flexible.length) return;
 
                 chosenFlexible.push(flexible[index]);
@@ -303,16 +306,16 @@
             const teamA = bestCombinations[randomIndex];
             const teamB = participatingPlayers.filter(p => !teamA.some(a => a.id === p.id));
 
-            teamA.sort((a, b) => b.mmr - a.mmr);
-            teamB.sort((a, b) => b.mmr - a.mmr);
+            const teamAIds = teamA.map(p => p.id);
+            const teamBIds = teamB.map(p => p.id);
 
-            const sumA = teamA.reduce((sum, p) => sum + p.mmr, 0);
-            const sumB = teamB.reduce((sum, p) => sum + p.mmr, 0);
+            // 🌟 사람들의 기대감을 위해 1초간 애니메이션 보여주기
+            document.getElementById('listA').innerHTML = '<li class="loading-text">매칭 결과를 서버에 기록 중입니다... ⏳</li>';
+            document.getElementById('listB').innerHTML = '<li class="loading-text">매칭 결과를 서버에 기록 중입니다... ⏳</li>';
 
-            document.getElementById('listA').innerHTML = teamA.map(p => `<li>${p.name} (${p.mmr}점)</li>`).join('');
-            document.getElementById('scoreA').innerText = sumA;
-            document.getElementById('listB').innerHTML = teamB.map(p => `<li>${p.name} (${p.mmr}점)</li>`).join('');
-            document.getElementById('scoreB').innerText = sumB;
+            // 🌟 방장이 뽑은 결과를 DB에 업데이트! (업데이트 되면 모든 사람 화면이 자동으로 바뀜)
+            await supabase.from('players').update({ assigned_team: 'A' }).in('id', teamAIds);
+            await supabase.from('players').update({ assigned_team: 'B' }).in('id', teamBIds);
         }
 
         loadPlayers();
