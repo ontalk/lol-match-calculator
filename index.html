@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>롤밸런스</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .manager-box { background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ddd; }
+        .team-box { border: 1px solid #ccc; padding: 15px; margin-top: 10px; width: 45%; display: inline-block; vertical-align: top; border-radius: 8px; box-sizing: border-box; }
+        .team-container { display: flex; justify-content: space-between; margin-top: 15px; }
+        input { padding: 8px; font-size: 14px; margin-right: 5px; width: 150px; }
+        button { padding: 8px 15px; font-size: 14px; cursor: pointer; background: #0070f3; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0051b3; }
+        .btn-delete { background: #ff4d4d; padding: 4px 8px; font-size: 12px; margin-left: 10px; }
+        .btn-delete:hover { background: #cc0000; }
+        .btn-match { width: 100%; padding: 12px; font-size: 18px; background: #22c55e; margin-top: 20px; }
+        .btn-match:hover { background: #16a34a; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>🎮 게임 팀 매치 계산기 & 선수 관리</h1>
+
+    <div class="manager-box">
+        <h3>👤 새 선수 등록</h3>
+        <input type="text" id="playerName" placeholder="선수 이름 입력">
+        <input type="number" id="playerMmr" placeholder="MMR 점수 (예: 1000)">
+        <button onclick="addPlayer()">등록하기</button>
+    </div>
+
+    <div class="manager-box">
+        <h3>📋 현재 등록된 선수 명단</h3>
+        <ul id="playerList">불러오는 중...</ul>
+    </div>
+
+    <button class="btn-match" onclick="makeTeams()">공평하게 팀 나누기</button>
+
+    <div class="team-container">
+        <div id="teamA" class="team-box">
+            <h3>🔴 A팀 (총점: <span id="scoreA">0</span>)</h3>
+            <ul id="listA"></ul>
+        </div>
+        <div id="teamB" class="team-box">
+            <h3>🔵 B팀 (총점: <span id="scoreB">0</span>)</h3>
+            <ul id="listB"></ul>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+        // ★ 본인의 Supabase URL과 Key를 다시 꼭 입력해 주세요!
+        const supabaseUrl = 'https://xfxsubglqbwqvchpjksc.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmeHN1YmdscWJ3cXZjaHBqa3NjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzg4NTYsImV4cCI6MjA5ODkxNDg1Nn0.CTxppetZcwGWqLpUtPjnyreIY6zVgIjrvj4DP6w4maw';
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        // [기능 1] DB에서 선수 목록 불러와서 화면에 그리기
+        async function loadPlayers() {
+            const { data: players, error } = await supabase
+                .from('players')
+                .select('*')
+                .order('id', { ascending: true }); // 등록된 순서대로 정렬
+
+            if (error) {
+                document.getElementById('playerList').innerText = "데이터를 불러오지 못했습니다.";
+                return;
+            }
+
+            const playerListElement = document.getElementById('playerList');
+            if (players.length === 0) {
+                playerListElement.innerHTML = "<li>등록된 선수가 없습니다. 선수를 추가해 보세요!</li>";
+                return;
+            }
+
+            // 목록 그리기 + 삭제 버튼 달아주기
+            playerListElement.innerHTML = players.map(player => `
+                <li>
+                    <strong>${player.name}</strong> (${player.mmr}점)
+                    <button class="btn-delete" onclick="deletePlayer(${player.id})">삭제</button>
+                </li>
+            `).join('');
+        }
+
+        // [기능 2] 웹에서 직접 선수 추가하기
+        window.addPlayer = async function() {
+            const nameInput = document.getElementById('playerName');
+            const mmrInput = document.getElementById('playerMmr');
+
+            const name = nameInput.value.trim();
+            const mmr = parseInt(mmrInput.value);
+
+            if (!name || isNaN(mmr)) {
+                alert("이름과 MMR 점수를 정확히 입력해 주세요.");
+                return;
+            }
+
+            // DB에 데이터 삽입 요청
+            const { error } = await supabase.from('players').insert([{ name, mmr }]);
+
+            if (error) {
+                alert("선수 등록에 실패했습니다: " + error.message);
+            } else {
+                // 입력창 비우고 목록 새로고침
+                nameInput.value = '';
+                mmrInput.value = '';
+                await loadPlayers();
+            }
+        }
+
+        // [기능 3] 웹에서 직접 선수 삭제하기
+        window.deletePlayer = async function(id) {
+            if (!confirm("정말 이 선수를 삭제하시겠습니까?")) return;
+
+            // DB에서 해당 id를 가진 데이터 삭제 요청
+            const { error } = await supabase.from('players').delete().eq('id', id);
+
+            if (error) {
+                alert("선수 삭제에 실패했습니다: " + error.message);
+            } else {
+                // 목록 새로고침
+                await loadPlayers();
+            }
+        }
+
+        // [기능 4] 기존의 팀 매칭 계산 로직
+        window.makeTeams = async function() {
+            const { data: players, error } = await supabase.from('players').select('*');
+            if (error || !players || players.length === 0) {
+                alert("매칭할 선수가 없습니다.");
+                return;
+            }
+
+            // MMR 기준 내림차순 정렬
+            players.sort((a, b) => b.mmr - a.mmr);
+
+            let teamA = [], teamB = [];
+            let sumA = 0, sumB = 0;
+
+            players.forEach(player => {
+                if (sumA <= sumB) {
+                    teamA.push(player);
+                    sumA += player.mmr;
+                } else {
+                    teamB.push(player);
+                    sumB += player.mmr;
+                }
+            });
+
+            document.getElementById('listA').innerHTML = teamA.map(p => `<li>${p.name} (${p.mmr}점)</li>`).join('');
+            document.getElementById('scoreA').innerText = sumA;
+            
+            document.getElementById('listB').innerHTML = teamB.map(p => `<li>${p.name} (${p.mmr}점)</li>`).join('');
+            document.getElementById('scoreB').innerText = sumB;
+        }
+
+        // 페이지가 처음 열릴 때 자동으로 선수 목록을 가져옵니다.
+        loadPlayers();
+    </script>
+</body>
+</html>
