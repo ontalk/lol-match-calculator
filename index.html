@@ -41,7 +41,7 @@
 </head>
 <body>
 
-    <h1>🎮 롤 내전 팀 짜기 프로그램</h1>
+    <h1>🎮 롤 내전 실시간 팀 매니저</h1>
 
     <div class="manager-box">
         <h3 style="text-align: center; margin-top: 0;">👤 선수 등록</h3>
@@ -87,38 +87,46 @@
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmeHN1YmdscWJ3cXZjaHBqa3NjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzg4NTYsImV4cCI6MjA5ODkxNDg1Nn0.CTxppetZcwGWqLpUtPjnyreIY6zVgIjrvj4DP6w4maw';
         const supabase = createClient(supabaseUrl, supabaseKey);
 
-        let allPlayers = []; 
         let participatingPlayers = []; 
 
+        // 🌟 실시간 마법! 누군가 DB를 바꾸면 내 화면도 자동으로 새로고침 됩니다.
+        supabase
+            .channel('public:players')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, payload => {
+                loadPlayers();
+            })
+            .subscribe();
+
+        // 🌟 DB에서 가져올 때 참가 상태(is_participating)를 기준으로 나눕니다.
         async function loadPlayers() {
             const { data, error } = await supabase.from('players').select('*').order('mmr', { ascending: false });
             if (!error && data) {
-                allPlayers = data;
-                renderLists();
+                renderLists(data);
             }
         }
 
-        function renderLists() {
+        function renderLists(allPlayers) {
             const dbListElement = document.getElementById('dbList');
             const partListElement = document.getElementById('participatingList');
             
             dbListElement.innerHTML = '';
             partListElement.innerHTML = '';
             
+            participatingPlayers = allPlayers.filter(p => p.is_participating === true);
+            const availablePlayers = allPlayers.filter(p => p.is_participating === false || p.is_participating === null);
+
             document.getElementById('partCount').innerText = participatingPlayers.length;
 
-            // 🌟 왼쪽 목록 그리기 (팀 고정 선택 박스 추가)
+            // 참가자 명단 그리기 (팀 고정 셀렉트 박스 포함)
             participatingPlayers.forEach(p => {
-                if (!p.lock) p.lock = 'none'; // 초기 상태는 고정 안 함(랜덤)
-                
                 partListElement.innerHTML += `
                     <li>
                         <span class="player-info"><strong>${p.name}</strong> (${p.mmr}점)</span>
                         <div class="btn-group">
                             <select onchange="window.changeLock(${p.id}, this.value)" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc;">
-                                <option value="none" ${p.lock === 'none' ? 'selected' : ''}>🎲 랜덤</option>
-                                <option value="A" ${p.lock === 'A' ? 'selected' : ''}>🔴 A고정</option>
-                                <option value="B" ${p.lock === 'B' ? 'selected' : ''}>🔵 B고정</option>
+                                <option value="none" ${p.lock_team === 'none' || !p.lock_team ? 'selected' : ''}>🎲 랜덤</option>
+                                <option value="A" ${p.lock_team === 'A' ? 'selected' : ''}>🔴 A고정</option>
+                                <option value="B" ${p.lock_team === 'B' ? 'selected' : ''}>🔵 B고정</option>
                             </select>
                             <button class="btn-remove" onclick="removeFromMatch(${p.id})">취소 ➡️</button>
                         </div>
@@ -126,10 +134,7 @@
                 `;
             });
 
-            // 🌟 오른쪽 목록 그리기 ([수정] 버튼 추가)
-            const participatingIds = participatingPlayers.map(p => p.id);
-            const availablePlayers = allPlayers.filter(p => !participatingIds.includes(p.id));
-
+            // 남은 대기자 명단 그리기
             availablePlayers.forEach(p => {
                 dbListElement.innerHTML += `
                     <li>
@@ -144,43 +149,30 @@
             });
         }
 
-        // 팀 고정 상태 기억하기
-        window.changeLock = function(id, value) {
-            const player = participatingPlayers.find(p => p.id === id);
-            if (player) {
-                player.lock = value;
-            }
+        // 🌟 클릭 시 브라우저가 아니라 DB 데이터를 직접 바꿉니다.
+        window.addToMatch = async function(id) {
+            await supabase.from('players').update({ is_participating: true, lock_team: 'none' }).eq('id', id);
+            loadPlayers();
         }
 
-        // 🌟 [신규] 실시간 점수 수정 기능
+        window.removeFromMatch = async function(id) {
+            await supabase.from('players').update({ is_participating: false, lock_team: 'none' }).eq('id', id);
+            loadPlayers();
+        }
+
+        window.changeLock = async function(id, value) {
+            await supabase.from('players').update({ lock_team: value }).eq('id', id);
+            loadPlayers();
+        }
+
         window.editPlayer = async function(id, name, currentMmr) {
             const newMmrText = prompt(`[${name}] 선수의 새로운 MMR 점수를 입력하세요:`, currentMmr);
-            if (newMmrText === null) return; // 취소 누르면 종료
-
+            if (newMmrText === null) return; 
             const newMmr = parseInt(newMmrText);
             if (isNaN(newMmr)) return alert("정확한 숫자 점수를 입력해 주세요.");
 
-            // Supabase DB 데이터 업데이트
-            const { error } = await supabase.from('players').update({ mmr: newMmr }).eq('id', id);
-            
-            if (!error) {
-                loadPlayers(); // 성공 시 리스트 리로드
-            } else {
-                alert("점수 수정 실패: " + error.message);
-            }
-        }
-
-        window.addToMatch = function(id) {
-            const player = allPlayers.find(p => p.id === id);
-            if (player && !participatingPlayers.some(p => p.id === id)) {
-                participatingPlayers.push({ ...player, lock: 'none' });
-                renderLists();
-            }
-        }
-
-        window.removeFromMatch = function(id) {
-            participatingPlayers = participatingPlayers.filter(p => p.id !== id);
-            renderLists();
+            await supabase.from('players').update({ mmr: newMmr }).eq('id', id);
+            loadPlayers();
         }
 
         window.addPlayer = async function() {
@@ -188,12 +180,10 @@
             const mmr = parseInt(document.getElementById('playerMmr').value);
             if (!name || isNaN(mmr)) return alert("이름과 점수를 확인해주세요.");
 
-            const { error } = await supabase.from('players').insert([{ name, mmr }]);
-            if (!error) {
-                document.getElementById('playerName').value = '';
-                document.getElementById('playerMmr').value = '';
-                loadPlayers();
-            }
+            await supabase.from('players').insert([{ name, mmr, is_participating: false, lock_team: 'none' }]);
+            document.getElementById('playerName').value = '';
+            document.getElementById('playerMmr').value = '';
+            loadPlayers();
         }
 
         window.bulkAddPlayers = async function() {
@@ -208,33 +198,26 @@
                 if (parts.length >= 2) {
                     const name = parts[0];
                     const mmr = parseInt(parts[1]);
-                    if (!isNaN(mmr)) insertData.push({ name, mmr });
+                    if (!isNaN(mmr)) insertData.push({ name, mmr, is_participating: false, lock_team: 'none' });
                 }
             }
 
             if (insertData.length > 0) {
                 document.getElementById('bulkData').value = '등록 중...';
-                const { error } = await supabase.from('players').insert(insertData);
-                if (!error) {
-                    alert(`${insertData.length}명 등록 완료!`);
-                    document.getElementById('bulkData').value = '';
-                    loadPlayers();
-                } else {
-                    alert("오류: " + error.message);
-                }
+                await supabase.from('players').insert(insertData);
+                alert(`${insertData.length}명 등록 완료!`);
+                document.getElementById('bulkData').value = '';
+                loadPlayers();
             }
         }
 
         window.deletePlayer = async function(id) {
             if (!confirm("삭제하시겠습니까?")) return;
-            const { error } = await supabase.from('players').delete().eq('id', id);
-            if (!error) {
-                participatingPlayers = participatingPlayers.filter(p => p.id !== id);
-                loadPlayers();
-            }
+            await supabase.from('players').delete().eq('id', id);
+            loadPlayers();
         }
 
-        // 🌟 [알고리즘 업그레이드] 고정 멤버 분리 및 최적의 랜덤 매칭
+        // 알고리즘: DB에 저장된 lock_team 상태를 기준으로 계산
         window.makeTeams = function() {
             if (participatingPlayers.length === 0) {
                 return alert("왼쪽 참가 명단에 선수를 추가해 주세요!");
@@ -244,20 +227,16 @@
             const targetSize = Math.floor(totalPlayers / 2); 
             const totalScore = participatingPlayers.reduce((sum, p) => sum + p.mmr, 0);
 
-            // 강제 고정 유저와 유연한(랜덤) 유저 분류
-            const forcedA = participatingPlayers.filter(p => p.lock === 'A');
-            const forcedB = participatingPlayers.filter(p => p.lock === 'B');
-            const flexible = participatingPlayers.filter(p => p.lock === 'none' || !p.lock);
+            const forcedA = participatingPlayers.filter(p => p.lock_team === 'A');
+            const forcedB = participatingPlayers.filter(p => p.lock_team === 'B');
+            const flexible = participatingPlayers.filter(p => p.lock_team === 'none' || !p.lock_team);
 
-            // 정원 초과 체크 검증
             if (forcedA.length > targetSize) return alert(`A팀 고정 인원(${forcedA.length}명)이 팀 정원(${targetSize}명)을 초과했습니다.`);
             if (forcedB.length > (totalPlayers - targetSize)) return alert(`B팀 고정 인원(${forcedB.length}명)이 팀 정원(${totalPlayers - targetSize}명)을 초과했습니다.`);
 
-            // A팀을 채우기 위해 랜덤 멤버 중 몇 명이 추가로 필요한가
             const needA = targetSize - forcedA.length;
             const forcedASum = forcedA.reduce((sum, p) => sum + p.mmr, 0);
 
-            // 10점 유저 분리 조건용 데이터
             const totalTens = participatingPlayers.filter(p => p.mmr === 10).length;
             const minTensInA = Math.floor(totalTens / 2);
             const maxTensInA = Math.ceil(totalTens / 2);
@@ -265,12 +244,10 @@
             let bestDiff = Infinity;
             let bestCombinations = []; 
 
-            // 유연한 인원들만 가지고 조합 탐색
             function dfs(index, chosenFlexible, currentFlexibleSum) {
                 if (chosenFlexible.length === needA) {
                     const finalTeamA = [...forcedA, ...chosenFlexible];
                     
-                    // 10점 유저 반반 분리 검증 규칙
                     if (totalTens >= 2) {
                         const tensInA = finalTeamA.filter(p => p.mmr === 10).length;
                         if (tensInA < minTensInA || tensInA > maxTensInA) return; 
@@ -306,7 +283,6 @@
                 return alert("고정 조건 및 10점 분리 조건을 만족하면서 인원수를 맞출 수 있는 조합이 없습니다.");
             }
 
-            // 최상의 밸런스 조합 중 무작위 선정
             const randomIndex = Math.floor(Math.random() * bestCombinations.length);
             const teamA = bestCombinations[randomIndex];
             const teamB = participatingPlayers.filter(p => !teamA.some(a => a.id === p.id));
