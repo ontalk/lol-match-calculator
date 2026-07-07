@@ -18,14 +18,13 @@
         .btn-add { background: #0070f3; padding: 10px 20px; } .btn-add:hover { background: #005bb5; }
         .btn-bulk { background: #8b5cf6; padding: 10px 20px; width: 100%; } .btn-bulk:hover { background: #7c3aed; }
         .btn-move { background: #10b981; font-size: 12px; } .btn-move:hover { background: #059669; }
+        .btn-edit { background: #eab308; font-size: 12px; } .btn-edit:hover { background: #ca8a04; }
         .btn-remove { background: #6b7280; font-size: 12px; } .btn-remove:hover { background: #4b5563; }
         .btn-delete { background: #ef4444; font-size: 12px; } .btn-delete:hover { background: #dc2626; }
         .btn-match { width: 100%; padding: 15px; font-size: 18px; background: #3b82f6; margin-top: 20px; border-radius: 8px; } .btn-match:hover { background: #2563eb; }
 
         /* 좌우 레이아웃 */
         .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-        
-        /* 💡 수정된 리스트 박스 디자인 (스크롤 오류 해결) */
         .list-box { border: 1px solid #ddd; padding: 0 15px 15px 15px; border-radius: 8px; background: #fff; min-height: 200px; max-height: 400px; overflow-y: auto; }
         .list-box h3 { margin: 0; text-align: center; border-bottom: 2px solid #eee; padding: 15px 0 10px 0; position: sticky; top: 0; background: #fff; z-index: 10; }
         
@@ -33,7 +32,7 @@
         ul { list-style: none; padding: 0; margin: 0; }
         li { padding: 10px 0; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; }
         .player-info { flex-grow: 1; }
-        .btn-group { display: flex; gap: 5px; } /* 버튼 간격 깔끔하게 정리 */
+        .btn-group { display: flex; gap: 5px; align-items: center; } 
         
         /* 결과 팀 박스 */
         .team-container { display: flex; justify-content: space-between; margin-top: 20px; gap: 20px; }
@@ -61,6 +60,7 @@
             <h3>👈 이번 게임 참가자 (<span id="partCount">0</span>명)</h3>
             <ul id="participatingList"></ul>
         </div>
+        
         <div class="list-box" style="border-top: 4px solid #6b7280;">
             <h3>👉 전체 등록 선수</h3>
             <ul id="dbList"></ul>
@@ -107,15 +107,26 @@
             
             document.getElementById('partCount').innerText = participatingPlayers.length;
 
+            // 🌟 왼쪽 목록 그리기 (팀 고정 선택 박스 추가)
             participatingPlayers.forEach(p => {
+                if (!p.lock) p.lock = 'none'; // 초기 상태는 고정 안 함(랜덤)
+                
                 partListElement.innerHTML += `
                     <li>
                         <span class="player-info"><strong>${p.name}</strong> (${p.mmr}점)</span>
-                        <button class="btn-remove" onclick="removeFromMatch(${p.id})">참가 취소 ➡️</button>
+                        <div class="btn-group">
+                            <select onchange="window.changeLock(${p.id}, this.value)" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc;">
+                                <option value="none" ${p.lock === 'none' ? 'selected' : ''}>🎲 랜덤</option>
+                                <option value="A" ${p.lock === 'A' ? 'selected' : ''}>🔴 A고정</option>
+                                <option value="B" ${p.lock === 'B' ? 'selected' : ''}>🔵 B고정</option>
+                            </select>
+                            <button class="btn-remove" onclick="removeFromMatch(${p.id})">취소 ➡️</button>
+                        </div>
                     </li>
                 `;
             });
 
+            // 🌟 오른쪽 목록 그리기 ([수정] 버튼 추가)
             const participatingIds = participatingPlayers.map(p => p.id);
             const availablePlayers = allPlayers.filter(p => !participatingIds.includes(p.id));
 
@@ -125,6 +136,7 @@
                         <span class="player-info"><strong>${p.name}</strong> (${p.mmr}점)</span>
                         <div class="btn-group">
                             <button class="btn-move" onclick="addToMatch(${p.id})">⬅️ 참가</button>
+                            <button class="btn-edit" onclick="editPlayer(${p.id}, '${p.name}', ${p.mmr})">수정</button>
                             <button class="btn-delete" onclick="deletePlayer(${p.id})">삭제</button>
                         </div>
                     </li>
@@ -132,10 +144,36 @@
             });
         }
 
+        // 팀 고정 상태 기억하기
+        window.changeLock = function(id, value) {
+            const player = participatingPlayers.find(p => p.id === id);
+            if (player) {
+                player.lock = value;
+            }
+        }
+
+        // 🌟 [신규] 실시간 점수 수정 기능
+        window.editPlayer = async function(id, name, currentMmr) {
+            const newMmrText = prompt(`[${name}] 선수의 새로운 MMR 점수를 입력하세요:`, currentMmr);
+            if (newMmrText === null) return; // 취소 누르면 종료
+
+            const newMmr = parseInt(newMmrText);
+            if (isNaN(newMmr)) return alert("정확한 숫자 점수를 입력해 주세요.");
+
+            // Supabase DB 데이터 업데이트
+            const { error } = await supabase.from('players').update({ mmr: newMmr }).eq('id', id);
+            
+            if (!error) {
+                loadPlayers(); // 성공 시 리스트 리로드
+            } else {
+                alert("점수 수정 실패: " + error.message);
+            }
+        }
+
         window.addToMatch = function(id) {
             const player = allPlayers.find(p => p.id === id);
             if (player && !participatingPlayers.some(p => p.id === id)) {
-                participatingPlayers.push(player);
+                participatingPlayers.push({ ...player, lock: 'none' });
                 renderLists();
             }
         }
@@ -175,18 +213,15 @@
             }
 
             if (insertData.length > 0) {
-                document.getElementById('bulkData').value = '등록 중... 잠시만 기다려주세요!';
+                document.getElementById('bulkData').value = '등록 중...';
                 const { error } = await supabase.from('players').insert(insertData);
                 if (!error) {
-                    alert(`${insertData.length}명 일괄 등록 완료!`);
+                    alert(`${insertData.length}명 등록 완료!`);
                     document.getElementById('bulkData').value = '';
                     loadPlayers();
                 } else {
-                    alert("오류 발생: " + error.message);
-                    document.getElementById('bulkData').value = text; 
+                    alert("오류: " + error.message);
                 }
-            } else {
-                alert("양식에 맞게 입력되지 않았습니다. (예: 인목 10)");
             }
         }
 
@@ -199,6 +234,7 @@
             }
         }
 
+        // 🌟 [알고리즘 업그레이드] 고정 멤버 분리 및 최적의 랜덤 매칭
         window.makeTeams = function() {
             if (participatingPlayers.length === 0) {
                 return alert("왼쪽 참가 명단에 선수를 추가해 주세요!");
@@ -208,7 +244,20 @@
             const targetSize = Math.floor(totalPlayers / 2); 
             const totalScore = participatingPlayers.reduce((sum, p) => sum + p.mmr, 0);
 
-            // ★ 10점 유저 관련 하드 조건 세팅
+            // 강제 고정 유저와 유연한(랜덤) 유저 분류
+            const forcedA = participatingPlayers.filter(p => p.lock === 'A');
+            const forcedB = participatingPlayers.filter(p => p.lock === 'B');
+            const flexible = participatingPlayers.filter(p => p.lock === 'none' || !p.lock);
+
+            // 정원 초과 체크 검증
+            if (forcedA.length > targetSize) return alert(`A팀 고정 인원(${forcedA.length}명)이 팀 정원(${targetSize}명)을 초과했습니다.`);
+            if (forcedB.length > (totalPlayers - targetSize)) return alert(`B팀 고정 인원(${forcedB.length}명)이 팀 정원(${totalPlayers - targetSize}명)을 초과했습니다.`);
+
+            // A팀을 채우기 위해 랜덤 멤버 중 몇 명이 추가로 필요한가
+            const needA = targetSize - forcedA.length;
+            const forcedASum = forcedA.reduce((sum, p) => sum + p.mmr, 0);
+
+            // 10점 유저 분리 조건용 데이터
             const totalTens = participatingPlayers.filter(p => p.mmr === 10).length;
             const minTensInA = Math.floor(totalTens / 2);
             const maxTensInA = Math.ceil(totalTens / 2);
@@ -216,43 +265,48 @@
             let bestDiff = Infinity;
             let bestCombinations = []; 
 
-            function dfs(index, currentTeamA, currentSum) {
-                if (currentTeamA.length === targetSize) {
+            // 유연한 인원들만 가지고 조합 탐색
+            function dfs(index, chosenFlexible, currentFlexibleSum) {
+                if (chosenFlexible.length === needA) {
+                    const finalTeamA = [...forcedA, ...chosenFlexible];
                     
-                    // ★ 10점 유저 쏠림 방지 로직 (조건에 안 맞으면 이 조합은 폐기)
+                    // 10점 유저 반반 분리 검증 규칙
                     if (totalTens >= 2) {
-                        const tensInA = currentTeamA.filter(p => p.mmr === 10).length;
+                        const tensInA = finalTeamA.filter(p => p.mmr === 10).length;
                         if (tensInA < minTensInA || tensInA > maxTensInA) return; 
                     }
 
-                    const diff = Math.abs((totalScore - currentSum) - currentSum);
+                    const sumA = forcedASum + currentFlexibleSum;
+                    const sumB = totalScore - sumA;
+                    const diff = Math.abs(sumA - sumB);
+
                     if (diff < bestDiff) {
                         bestDiff = diff;
-                        bestCombinations = [ [...currentTeamA] ]; 
+                        bestCombinations = [ finalTeamA ]; 
                     } else if (diff === bestDiff) {
-                        bestCombinations.push([...currentTeamA]);
+                        bestCombinations.push(finalTeamA);
                     }
                     return;
                 }
                 
-                if (index >= totalPlayers) return;
+                if (index >= flexible.length) return;
 
-                currentTeamA.push(participatingPlayers[index]);
-                dfs(index + 1, currentTeamA, currentSum + participatingPlayers[index].mmr);
-                currentTeamA.pop();
+                chosenFlexible.push(flexible[index]);
+                dfs(index + 1, chosenFlexible, currentFlexibleSum + flexible[index].mmr);
+                chosenFlexible.pop();
 
-                if (totalPlayers - (index + 1) >= targetSize - currentTeamA.length) {
-                    dfs(index + 1, currentTeamA, currentSum);
+                if (flexible.length - (index + 1) >= needA - chosenFlexible.length) {
+                    dfs(index + 1, chosenFlexible, currentFlexibleSum);
                 }
             }
 
             dfs(0, [], 0);
 
-            // 혹시라도 조건이 안 맞아서 팀 구성이 안 된 경우 방지
             if (bestCombinations.length === 0) {
-                return alert("10점 인원 분리 조건을 만족하면서 인원수를 맞출 수 있는 조합이 없습니다.");
+                return alert("고정 조건 및 10점 분리 조건을 만족하면서 인원수를 맞출 수 있는 조합이 없습니다.");
             }
 
+            // 최상의 밸런스 조합 중 무작위 선정
             const randomIndex = Math.floor(Math.random() * bestCombinations.length);
             const teamA = bestCombinations[randomIndex];
             const teamB = participatingPlayers.filter(p => !teamA.some(a => a.id === p.id));
