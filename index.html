@@ -15,6 +15,7 @@
         button { padding: 8px 12px; font-size: 14px; cursor: pointer; border: none; border-radius: 4px; color: white; font-weight: bold; transition: 0.2s; }
         .btn-add { background: #0070f3; padding: 10px 20px; } .btn-add:hover { background: #005bb5; }
         .btn-bulk { background: #8b5cf6; padding: 10px 20px; width: 100%; } .btn-bulk:hover { background: #7c3aed; }
+        .btn-participants { background: #0ea5e9; padding: 10px 20px; width: 100%; } .btn-participants:hover { background: #0284c7; }
         .btn-move { background: #10b981; font-size: 12px; } .btn-move:hover { background: #059669; }
         .btn-edit { background: #eab308; font-size: 12px; } .btn-edit:hover { background: #ca8a04; }
         .btn-remove { background: #6b7280; font-size: 12px; } .btn-remove:hover { background: #4b5563; }
@@ -54,6 +55,9 @@
         <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
         <textarea id="bulkData" placeholder="여러 명 한 번에 등록하려면 여기에 복사+붙여넣기 하세요.&#13;&#10;예시:&#13;&#10;인목 10&#13;&#10;승우 10"></textarea>
         <button class="btn-bulk" onclick="bulkAddPlayers()">전체 명단 일괄 등록하기</button>
+        <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
+        <textarea id="bulkParticipants" placeholder="이번 게임 참가자 이름을 한 번에 붙여넣기&#13;&#10;예시:&#13;&#10;페이커&#13;&#10;쵸비&#13;&#10;또는 페이커, 쵸비, 데프트"></textarea>
+        <button class="btn-participants" onclick="bulkAddToMatch()">참가자 일괄 추가</button>
     </div>
 
     <div class="grid-container">
@@ -75,11 +79,11 @@
 
     <!-- 결과 화면 -->
     <div class="team-container">
-        <div id="teamA_box" class="team-box" style="border-top: 4px solid #ef4444;">
+        <div id="teamA_box" class="team-box" style="border-top: 4px solid #3b82f6;">
             <h3>🔴 A팀 (총점: <span id="scoreA">0</span>)</h3>
             <ul id="listA"><li class="empty-team">팀을 나누면 여기에 결과가 표시됩니다.</li></ul>
         </div>
-        <div id="teamB_box" class="team-box" style="border-top: 4px solid #3b82f6;">
+        <div id="teamB_box" class="team-box" style="border-top: 4px solid #ef4444;">
             <h3>🔵 B팀 (총점: <span id="scoreB">0</span>)</h3>
             <ul id="listB"><li class="empty-team">팀을 나누면 여기에 결과가 표시됩니다.</li></ul>
         </div>
@@ -92,7 +96,8 @@
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmeHN1YmdscWJ3cXZjaHBqa3NjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzg4NTYsImV4cCI6MjA5ODkxNDg1Nn0.CTxppetZcwGWqLpUtPjnyreIY6zVgIjrvj4DP6w4maw';
         const supabase = createClient(supabaseUrl, supabaseKey);
 
-        let participatingPlayers = []; 
+        let participatingPlayers = [];
+        let allPlayersCache = [];
 
         // 실시간 동기화 마법
         supabase
@@ -134,6 +139,7 @@
         }
 
         function renderLists(allPlayers) {
+            allPlayersCache = allPlayers;
             const dbListElement = document.getElementById('dbList');
             const partListElement = document.getElementById('participatingList');
             
@@ -232,6 +238,53 @@
                 alert(`${insertData.length}명 등록 완료!`);
                 document.getElementById('bulkData').value = '';
             }
+        }
+
+        window.bulkAddToMatch = async function() {
+            const text = document.getElementById('bulkParticipants').value.trim();
+            if (!text) return alert("참가자 이름을 입력해주세요.");
+
+            const names = text
+                .split(/[\n,]+/)
+                .map(name => name.trim())
+                .filter(Boolean);
+            const uniqueNames = [...new Set(names)];
+            if (uniqueNames.length === 0) return alert("참가자 이름을 입력해주세요.");
+
+            const playersByName = new Map(allPlayersCache.map(player => [player.name.trim(), player]));
+            const matchedPlayers = uniqueNames
+                .map(name => playersByName.get(name))
+                .filter(Boolean);
+            const missingNames = uniqueNames.filter(name => !playersByName.has(name));
+            const alreadyParticipating = matchedPlayers.filter(player => player.is_participating === true);
+            const newParticipants = matchedPlayers.filter(player => player.is_participating !== true);
+
+            if (matchedPlayers.length === 0) {
+                return alert(`등록된 선수와 일치하는 이름이 없습니다.\n확인 필요: ${missingNames.join(', ')}`);
+            }
+
+            const availableSlots = 10 - participatingPlayers.length;
+            if (availableSlots <= 0) return alert("이미 참가자가 10명입니다.");
+            if (newParticipants.length > availableSlots) {
+                return alert(`추가 가능한 인원은 ${availableSlots}명입니다. 현재 입력은 ${newParticipants.length}명 추가가 필요합니다.`);
+            }
+
+            const message = [
+                `${newParticipants.length}명을 참가자로 추가합니다.`,
+                alreadyParticipating.length ? `이미 참가 중: ${alreadyParticipating.map(player => player.name).join(', ')}` : '',
+                missingNames.length ? `등록 안 됨: ${missingNames.join(', ')}` : ''
+            ].filter(Boolean).join('\n');
+
+            if (!confirm(message)) return;
+
+            const ids = newParticipants.map(player => player.id);
+            if (ids.length > 0) {
+                await supabase
+                    .from('players')
+                    .update({ is_participating: true, lock_team: 'none', assigned_team: null })
+                    .in('id', ids);
+            }
+            document.getElementById('bulkParticipants').value = '';
         }
 
         window.deletePlayer = async function(id) {
